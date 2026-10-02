@@ -1,35 +1,31 @@
-# GMAIL AI ASSISTANT
+# GMAIL AI ASSISTANT v1.1
 
-Giao diện độc lập chạy trên GitHub Pages, sử dụng Supabase Auth và Edge Functions.
+Web App tĩnh (GitHub Pages) kết nối Supabase Auth, Edge Functions và Gmail API. Bản này **không có AI gửi thư**.
 
-## Cài đặt
+## Cập nhật GitHub
 
-1. Trong `config.js`, thay `DAN_SUPABASE_PUBLISHABLE_KEY_VAO_DAY` bằng **Publishable key** của dự án Supabase (bắt đầu bằng `sb_publishable_`).
-2. Tải `index.html`, `styles.css`, `config.js`, `app.js` lên thư mục gốc nhánh `main` của GitHub repository `GMAIL-AI-ASSISTANT`.
-3. GitHub Pages: Deploy from a branch → `main` → `/(root)`.
-4. Supabase Auth → URL Configuration → Redirect URLs: thêm `https://vothanhdamkg1982-lang.github.io/GMAIL-AI-ASSISTANT/`.
-5. Các Edge Functions hiện có phải hoạt động: `gmail-ai-health`, `gmail-oauth-start`, `gmail-list-messages`. Khi thêm tài khoản Gmail từ giao diện, `gmail-oauth-callback` phải đang hoạt động.
+1. Giữ nguyên `config.js` đang chạy trong repo, đặc biệt `publishableKey` và `initialAccounts`. **Không tải đè file `config.js` mẫu trong ZIP**, vì nó không chứa khóa cá nhân đã cấu hình.
+2. Tải đè `index.html`, `styles.css`, `app.js` và `README.md` trong thư mục gốc nhánh `main` của repo.
+3. Không tải thư mục `backend-optional` lên GitHub Pages.
+4. Đợi GitHub Pages triển khai, nhấn Ctrl+F5 để tải lại.
 
-## Danh sách nhiều tài khoản Gmail (nâng cấp)
+## Hai bước máy chủ bắt buộc cho tính năng mới
 
-Frontend cố gắng gọi thêm Edge Function `gmail-accounts` để lấy danh sách tài khoản theo phiên đăng nhập. Nếu chưa triển khai, ứng dụng dùng **tài khoản ban đầu đã kiểm thử** trong `config.js`. Khi bạn kết nối tài khoản mới, cần triển khai `gmail-accounts` để ứng dụng tự hiển thị tất cả tài khoản. Mã bổ sung nằm trong thư mục `backend-optional/`.
+1. Trong Supabase SQL Editor, chạy `backend-optional/list-accounts.sql`. Vào Integrations → Data API → Settings → Exposed functions, chọn `public.list_gmail_accounts`. Tạo Edge Function tên `gmail-accounts`, thay `index.ts` bằng nội dung `backend-optional/gmail-accounts-index.ts`, deploy và đặt **Verify JWT with legacy secret = OFF**.
+2. Tạo Edge Function tên `gmail-message-detail`, thay `index.ts` bằng `backend-optional/gmail-message-detail-index.ts`, deploy và đặt **Verify JWT with legacy secret = OFF**. Function sử dụng các RPC `get_gmail_credentials` và `update_gmail_access_token` đã tạo từ v1.0, và secrets đã lưu. Không cần bảng hay secret mới.
 
-## Hiện có
+## Các chức năng
 
-- Đăng nhập Google thông qua Supabase Auth; kiểm tra quản trị bằng `gmail-ai-health`.
-- Kết nối tài khoản Gmail qua `gmail-oauth-start` (tab Google mới).
-- Đọc 10 email gần nhất qua `gmail-list-messages`; tự làm mới token tại máy chủ.
-- Chọn tài khoản, tìm kiếm trong 10 email đã tải, xem người gửi/tiêu đề/ngày/đoạn trích.
-- Giao diện đáp ứng màn hình máy tính và điện thoại; đăng xuất.
+- Đăng nhập quản trị; kiểm tra `gmail-ai-health`.
+- Danh sách nhiều tài khoản lấy từ `gmail-accounts` (nếu function chưa được triển khai, tạm sử dụng `initialAccounts` hiện có).
+- Danh sách 10 email gần nhất lấy từ `gmail-list-messages`; tìm/lọc tại giao diện.
+- Nhấn thư để tải nội dung đầy đủ (ưu tiên `text/plain`; nếu chỉ có HTML, hiển thị trong iframe sandbox với CSP giới hạn).
+- Tệp đính kèm tối đa 7 MB/tệp, tải xuống khi người dùng nhấn nút; không tự động tải.
+- Giải mã RFC 2047 cho tiêu đề/người gửi và hỗ trợ charset phần thân email. Một số email có header sai chuẩn vẫn có thể lỗi hiển thị.
+- Không có tính năng gửi thư hoặc gọi AI trong bản này.
 
-## Chưa có
+## An toàn
 
-- Đọc toàn bộ nội dung/đính kèm; tìm kiếm Gmail phía máy chủ.
-- AI tóm tắt, AI soạn thư, lưu bản nháp hoặc gửi thư có phê duyệt. Các nút tương ứng đang bị khóa.
-- Sau khi cấp quyền tài khoản Gmail mới, hãy quay lại trang ứng dụng rồi **tải lại trang**; `gmail-accounts` sẽ cập nhật danh sách nếu được triển khai.
+`config.js` được xuất bản công khai, nên chỉ chứa Supabase publishable key, URL Supabase và ID tài khoản; không chứa `sb_secret_`, `service_role`, Client Secret, Refresh Token hay `GMAIL_ENCRYPTION_KEY`.
 
-## Bảo mật
-
-`config.js` là **mã công khai**. Không bao giờ đưa `sb_secret_`, `service_role`, Google Client Secret, Access/Refresh Token, `GMAIL_ENCRYPTION_KEY` hoặc OAuth URL có `code`/`state` vào repository.
-
-GitHub Pages chỉ cung cấp giao diện; dữ liệu nhạy cảm xử lý bên Supabase. Các quyền SQL, RLS và chính sách truy cập phải được rà soát khi mở rộng hệ thống.
+Giới hạn 7 MB áp dụng cho tệp đính kèm tải qua Edge Function để tránh phản hồi JSON quá lớn. Tệp lớn hơn sẽ báo lỗi và không được tải trong bản 1.1.

@@ -10,7 +10,7 @@
     messageList: $("messageList"), messageCount: $("messageCount"),
     messageDetail: $("messageDetail"), notice: $("notice")
   };
-  const state = { client:null, admin:false, user:null, accounts:[], activeAccount:null, messages:[], activeMessage:null, busy:false };
+  const state = { client:null, admin:false, user:null, accounts:[], activeAccount:null, messages:[], activeMessage:null, busy:false, detailSeq:0 };
   let noticeTimer;
 
   function notice(message) {
@@ -26,7 +26,7 @@
     state.messages=[];state.activeMessage=null;
     els.messageList.replaceChildren(makeEmpty(text));
     els.messageCount.textContent="0 thư";
-    els.messageDetail.replaceChildren(makeEmpty("Chọn một thư trong danh sách để xem thông tin đã tải."));
+    state.detailSeq++; els.messageDetail.replaceChildren(makeEmpty("Chọn một thư để đọc nội dung."));
   }
   function makeEmpty(text) { const node=document.createElement("div");node.className="empty";node.textContent=text;return node; }
   function setAuth(phase,message) {
@@ -72,7 +72,7 @@
       } else {throw new Error("Invalid account response");}
     }catch(error){
       state.accounts=Array.isArray(config.initialAccounts)?config.initialAccounts.filter(a=>a?.id&&a?.email):[];
-      console.info("Đang dùng danh sách tài khoản ban đầu; gmail-accounts chưa sẵn sàng.");
+      notice("Chưa tải được danh sách tài khoản tự động; đang dùng tài khoản đã cấu hình ban đầu.");
     }
     if(state.accounts.length && !state.accounts.some(a=>a.id===state.activeAccount?.id))state.activeAccount=state.accounts[0];
     renderAccounts();
@@ -81,7 +81,7 @@
   async function selectAccount(id) {
     if(!state.admin)return;
     const account=state.accounts.find(a=>a.id===id);if(!account)return;
-    state.activeAccount=account;renderAccounts();await loadMessages();
+    state.detailSeq++;state.activeAccount=account;renderAccounts();await loadMessages();
   }
   function renderMessages(){
     const query=els.searchInput.value.toLocaleLowerCase("vi").trim();
@@ -97,18 +97,60 @@
       top.append(sender,time);
       const subject=document.createElement("div");subject.className="message-subject";subject.textContent=m.subject||"(Không có tiêu đề)";
       const snippet=document.createElement("div");snippet.className="snippet";snippet.textContent=m.snippet||"";
-      btn.append(top,subject,snippet);btn.addEventListener("click",()=>{state.activeMessage=m;renderMessages();renderDetail();});
+      btn.append(top,subject,snippet);btn.addEventListener("click",()=>{state.activeMessage=m;renderMessages();void renderDetail();});
       els.messageList.append(btn);
     }
   }
-  function renderDetail(){
-    els.messageDetail.replaceChildren();const m=state.activeMessage;
-    if(!m){els.messageDetail.append(makeEmpty("Chọn một thư trong danh sách."));return;}
-    for(const [label,value] of [["Người gửi",m.from],["Tiêu đề",m.subject],["Ngày",m.date]]){
-      const p=document.createElement("p");p.className="detail-row";
-      const b=document.createElement("b");b.textContent=label+": ";p.append(b,document.createTextNode(value||"—"));els.messageDetail.append(p);
-    }
-    const p=document.createElement("p");p.className="detail-snippet";p.textContent=m.snippet||"Không có đoạn xem trước.";els.messageDetail.append(p);
+  // Hiển thị thư dưới dạng node/textContent; HTML chỉ đặt trong iframe sandbox.
+  async function renderDetail(){
+    const seq=++state.detailSeq; const m=state.activeMessage; const account=state.activeAccount;
+    els.messageDetail.replaceChildren();
+    if(!m || !account){els.messageDetail.append(makeEmpty("Chọn một thư trong danh sách."));return;}
+    els.messageDetail.append(makeEmpty("Đang tải nội dung thư và tệp đính kèm…"));
+    try{
+      const detail=await invoke("gmail-message-detail",{action:"detail",account_id:account.id,message_id:m.id});
+      if(seq!==state.detailSeq || state.activeAccount?.id!==account.id)return;
+      if(!detail?.success || !detail.message)throw new Error("Không lấy được nội dung thư.");
+      const d=detail.message; els.messageDetail.replaceChildren();
+      const subject=document.createElement("h3");subject.className="detail-subject";subject.textContent=fixText(d.subject||m.subject||"(Không có tiêu đề)");els.messageDetail.append(subject);
+      for(const [label,value] of [["Người gửi",d.from],["Người nhận",d.to],["Ngày",d.date]]){
+        const p=document.createElement("p");p.className="detail-row detail-meta";const b=document.createElement("b");b.textContent=label+": ";p.append(b,document.createTextNode(fixText(value||"—")));els.messageDetail.append(p);
+      }
+      if(d.text){const p=document.createElement("div");p.className="message-body";p.textContent=fixText(d.text);els.messageDetail.append(p);}
+      else if(d.html){
+        const iframe=document.createElement("iframe");iframe.className="mail-frame";iframe.title="Nội dung HTML của email";
+        iframe.setAttribute("sandbox","");iframe.setAttribute("referrerpolicy","no-referrer");
+        // CSP trong srcdoc vô hiệu hóa tải tài nguyên và gửi form từ thư HTML.
+        iframe.srcdoc='<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; base-uri \'none\'; form-action \'none\'">'+d.html;
+        els.messageDetail.append(iframe);
+      }else{els.messageDetail.append(makeEmpty("Email không có phần nội dung văn bản có thể hiển thị."));}
+      if(Array.isArray(d.attachments)&&d.attachments.length){
+        const heading=document.createElement("h3");heading.className="detail-label";heading.textContent=`Tệp đính kèm (${d.attachments.length})`;els.messageDetail.append(heading);
+        const box=document.createElement("div");box.className="attachment-list";
+        for(const a of d.attachments){
+          const item=document.createElement("div");item.className="attachment";const label=document.createElement("span");
+          label.textContent=fixText(a.filename||"Tệp đính kèm")+" · "+formatBytes(a.size);
+          const button=document.createElement("button");button.className="btn btn-outline";button.type="button";button.textContent="Tải xuống";button.disabled=!a.attachment_id && !a.inline_data;
+          button.addEventListener("click",()=>void downloadAttachment(account.id,m.id,a,button));item.append(label,button);box.append(item);
+        }els.messageDetail.append(box);
+      }
+    }catch(error){if(seq===state.detailSeq){els.messageDetail.replaceChildren();const p=document.createElement("div");p.className="detail-error";p.textContent="Không đọc được nội dung thư: "+errorMessage(error);els.messageDetail.append(p);}}
+  }
+  function formatBytes(size){const n=Number(size)||0;return n>=1048576?(n/1048576).toFixed(1)+" MB":n>=1024?(n/1024).toFixed(1)+" KB":n+" B";}
+  function fixText(value){
+    const text=String(value||"");
+    // Chữa dạng mojibake UTF-8 thường gặp, chỉ khi xuất hiện dấu hiệu rõ rệt.
+    if(!/[ÃÂ][\u0080-\u00bf\u00a0-\u00ff]|\u00c3[\u0080-\u00ff]/.test(text))return text;
+    try{const bytes=Uint8Array.from(Array.from(text,c=>c.charCodeAt(0)));const fixed=new TextDecoder("utf-8",{fatal:true}).decode(bytes);return fixed.includes("�")?text:fixed;}catch{return text;}
+  }
+  function decodeB64Url(value){const s=value.replace(/-/g,"+").replace(/_/g,"/");const binary=atob(s);return Uint8Array.from(binary,c=>c.charCodeAt(0));}
+  async function downloadAttachment(accountId,messageId,a,button){
+    button.disabled=true;button.textContent="Đang tải…";
+    try{const result=await invoke("gmail-message-detail",{action:"attachment",account_id:accountId,message_id:messageId,attachment_id:a.attachment_id||null,part_id:a.part_id});
+      if(!result?.success || typeof result.data!=="string")throw new Error("Không tải được tệp.");
+      const bytes=decodeB64Url(result.data);const blob=new Blob([bytes],{type:result.mime_type||"application/octet-stream"});
+      const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=String(a.filename||"attachment").replace(/[\/\\]/g,"_");document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(error){notice("Lỗi tải tệp: "+errorMessage(error));}finally{button.disabled=false;button.textContent="Tải xuống";}
   }
   async function loadMessages(){
     if(!state.admin||!state.activeAccount||state.busy)return;
@@ -119,7 +161,7 @@
       if(!data?.success||!Array.isArray(data.messages))throw new Error("Dữ liệu thư không hợp lệ.");
       state.messages=data.messages;state.activeMessage=null;
       els.inboxSubtitle.textContent=`Hộp thư đến: ${data.email||state.activeAccount.email}`;
-      renderMessages();renderDetail();
+      renderMessages();els.messageDetail.replaceChildren(makeEmpty("Chọn một thư để đọc nội dung."));
     }catch(error){resetMessages("Không tải được hộp thư. Kiểm tra kết nối hoặc thử lại.");els.inboxSubtitle.textContent=state.activeAccount.email;notice(`Không đọc được Gmail: ${errorMessage(error)}`);}
     finally{state.busy=false;els.refreshBtn.disabled=!state.admin;}
   }

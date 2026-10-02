@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#1d4ed8">
-  <meta name="description" content="GMAIL AI ASSISTANT - Quản lý tài khoản Gmail trên giao diện riêng.">
+  <meta name="description" content="GMAIL AI ASSISTANT v1.1 - Đọc nội dung thư và tệp đính kèm.">
   <title>GMAIL AI ASSISTANT</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -13,7 +13,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><div class="logo" aria-hidden="true">✉</div><div><strong>GMAIL AI ASSISTANT</strong><small>Quản lý Gmail trên một giao diện</small></div></div>
+    <div class="brand"><div class="logo" aria-hidden="true">✉</div><div><strong>GMAIL AI ASSISTANT <small class="version">v1.1</small></strong><small>Quản lý Gmail trên một giao diện</small></div></div>
     <div class="top-actions"><span id="userPill" class="user-pill" hidden></span><button id="logoutBtn" class="btn btn-ghost" type="button" hidden>Đăng xuất</button></div>
   </header>
   <main class="layout">
@@ -37,7 +37,7 @@
         <div class="toolbar"><label for="searchInput" class="sr-only">Lọc thư</label><input id="searchInput" type="search" placeholder="Lọc người gửi, tiêu đề, nội dung xem trước…" disabled><span id="messageCount" class="muted small">0 thư</span></div>
         <div id="messageList" class="message-list"><div class="empty">Chưa có dữ liệu thư.</div></div>
       </section>
-      <section class="panel detail-panel"><h2>Thông tin thư</h2><div id="messageDetail" class="empty">Chọn một thư trong danh sách để xem thông tin đã tải.</div><p class="hint">Phiên bản này hiển thị tiêu đề, người gửi, ngày và đoạn xem trước. Chưa tải đầy đủ nội dung thư.</p></section>
+      <section class="panel detail-panel"><h2>Thông tin thư</h2><div id="messageDetail" class="empty">Chọn một thư để đọc đầy đủ nội dung và xem tệp đính kèm.</div><p class="hint">Thư HTML được hiển thị trong khung an toàn, không cho phép chạy script.</p></section>
       <section class="panel ai-panel"><h2>Trợ lý AI</h2><p class="muted">Tóm tắt nội dung đầy đủ, soạn bản nháp và gửi sau khi phê duyệt sẽ được bổ sung khi các Edge Functions tương ứng được xây dựng và kiểm thử.</p><div class="button-row"><button class="btn btn-outline" type="button" disabled>Tóm tắt bằng AI — sắp có</button><button class="btn btn-outline" type="button" disabled>Soạn trả lời — sắp có</button></div></section>
     </div>
   </main>
