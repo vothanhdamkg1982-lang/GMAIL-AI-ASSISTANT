@@ -1,166 +1,47 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="description" content="GMAIL AI ASSISTANT - Quản lý tài khoản Gmail trên giao diện riêng.">
   <title>GMAIL AI ASSISTANT</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f3f6fb;
-      color: #1f2937;
-    }
-
-    header {
-      background: #1e3a8a;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 25px;
-    }
-
-    header p {
-      margin-bottom: 0;
-      font-size: 14px;
-    }
-
-    main {
-      width: min(1100px, 94%);
-      margin: 25px auto;
-    }
-
-    .card {
-      background: white;
-      padding: 22px;
-      margin-bottom: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px
-        rgba(0, 0, 0, 0.07);
-    }
-
-    .card h2 {
-      margin-top: 0;
-      font-size: 20px;
-    }
-
-    button {
-      padding: 12px 16px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-    }
-
-    .status {
-      padding: 12px;
-      background: #eff6ff;
-      border-radius: 8px;
-      margin-top: 15px;
-    }
-
-    footer {
-      text-align: center;
-      padding: 18px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script defer src="config.js"></script>
+  <script defer src="app.js"></script>
 </head>
-
 <body>
-
-  <header>
-    <h1>GMAIL AI ASSISTANT</h1>
-    <p>Trợ lý quản lý Gmail thông minh</p>
+  <header class="topbar">
+    <div class="brand"><div class="logo" aria-hidden="true">✉</div><div><strong>GMAIL AI ASSISTANT</strong><small>Quản lý Gmail trên một giao diện</small></div></div>
+    <div class="top-actions"><span id="userPill" class="user-pill" hidden></span><button id="logoutBtn" class="btn btn-ghost" type="button" hidden>Đăng xuất</button></div>
   </header>
-
-  <main>
-
-    <section class="card">
-      <h2>Tài khoản quản trị</h2>
-
-      <p>
-        Đăng nhập để sử dụng hệ thống.
-      </p>
-
-      <button disabled>
-        Đăng nhập bằng Google
-      </button>
-
-      <div class="status">
-        Trạng thái: Chưa đăng nhập
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Tài khoản Gmail</h2>
-
-      <p>
-        Quản lý các tài khoản Gmail
-        đã kết nối.
-      </p>
-
-      <button disabled>
-        + Thêm tài khoản Gmail
-      </button>
-    </section>
-
-    <section class="card">
-      <h2>Hộp thư đến</h2>
-
-      <p>
-        Danh sách email sẽ hiển thị
-        tại khu vực này.
-      </p>
-
-      <button disabled>
-        Làm mới hộp thư
-      </button>
-    </section>
-
-    <section class="card">
-      <h2>Trợ lý AI</h2>
-
-      <p>
-        Tóm tắt email và đề xuất
-        nội dung phản hồi.
-      </p>
-
-      <button disabled>
-        Tóm tắt bằng AI
-      </button>
-
-      <button disabled>
-        Soạn thư trả lời
-      </button>
-    </section>
-
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel auth-panel">
+        <div class="section-title"><h2>Tài khoản quản trị</h2><span id="authBadge" class="badge">Chưa đăng nhập</span></div>
+        <p id="authStatus" class="muted" role="status" aria-live="polite">Đang kiểm tra phiên đăng nhập…</p>
+        <button id="loginBtn" class="btn btn-primary full" type="button" disabled>Đăng nhập bằng Google</button>
+      </section>
+      <section class="panel" id="accountsPanel">
+        <div class="section-title"><h2>Tài khoản Gmail</h2><span id="accountCount" class="badge">0</span></div>
+        <div id="accountList" class="account-list"><p class="muted">Đăng nhập để xem tài khoản.</p></div>
+        <button id="addAccountBtn" type="button" class="btn btn-outline full" disabled>＋ Thêm tài khoản Gmail</button>
+        <p class="hint">Kết nối Gmail là thao tác riêng với đăng nhập quản trị.</p>
+      </section>
+      <section class="panel hint-panel"><h2>Quyền riêng tư</h2><p>Ứng dụng chỉ hiển thị dữ liệu cho tài khoản quản trị. Khóa bí mật và token Gmail được xử lý tại Supabase.</p><p>Ứng dụng không tự động gửi email.</p></section>
+    </aside>
+    <div class="content">
+      <section class="panel inbox-panel">
+        <div class="section-title"><div><h2>Hộp thư đến</h2><p id="inboxSubtitle" class="muted">Chọn một tài khoản Gmail để xem thư.</p></div><button id="refreshBtn" type="button" class="btn btn-outline" disabled>↻ Làm mới</button></div>
+        <div class="toolbar"><label for="searchInput" class="sr-only">Lọc thư</label><input id="searchInput" type="search" placeholder="Lọc người gửi, tiêu đề, nội dung xem trước…" disabled><span id="messageCount" class="muted small">0 thư</span></div>
+        <div id="messageList" class="message-list"><div class="empty">Chưa có dữ liệu thư.</div></div>
+      </section>
+      <section class="panel detail-panel"><h2>Thông tin thư</h2><div id="messageDetail" class="empty">Chọn một thư trong danh sách để xem thông tin đã tải.</div><p class="hint">Phiên bản này hiển thị tiêu đề, người gửi, ngày và đoạn xem trước. Chưa tải đầy đủ nội dung thư.</p></section>
+      <section class="panel ai-panel"><h2>Trợ lý AI</h2><p class="muted">Tóm tắt nội dung đầy đủ, soạn bản nháp và gửi sau khi phê duyệt sẽ được bổ sung khi các Edge Functions tương ứng được xây dựng và kiểm thử.</p><div class="button-row"><button class="btn btn-outline" type="button" disabled>Tóm tắt bằng AI — sắp có</button><button class="btn btn-outline" type="button" disabled>Soạn trả lời — sắp có</button></div></section>
+    </div>
   </main>
-
-  <footer>
-    GMAIL AI ASSISTANT
-  </footer>
-
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <footer>GMAIL AI ASSISTANT · GitHub Pages + Supabase</footer>
 </body>
 </html>
