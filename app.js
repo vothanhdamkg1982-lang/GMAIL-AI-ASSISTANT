@@ -8,7 +8,7 @@
     accountList: $("accountList"), accountCount: $("accountCount"), addAccountBtn: $("addAccountBtn"),
     inboxSubtitle: $("inboxSubtitle"), refreshBtn: $("refreshBtn"), searchInput: $("searchInput"),
     messageList: $("messageList"), messageCount: $("messageCount"),
-    messageDetail: $("messageDetail"), notice: $("notice")
+    messageDetail: $("messageDetail"), detailPanel: $("detailPanel"), backInboxBtn: $("backInboxBtn"), notice: $("notice")
   };
   const state = { client:null, admin:false, user:null, accounts:[], activeAccount:null, messages:[], activeMessage:null, busy:false, detailSeq:0 };
   let noticeTimer;
@@ -97,7 +97,7 @@
       top.append(sender,time);
       const subject=document.createElement("div");subject.className="message-subject";subject.textContent=m.subject||"(Không có tiêu đề)";
       const snippet=document.createElement("div");snippet.className="snippet";snippet.textContent=m.snippet||"";
-      btn.append(top,subject,snippet);btn.addEventListener("click",()=>{state.activeMessage=m;renderMessages();void renderDetail();});
+      btn.append(top,subject,snippet);btn.addEventListener("click",()=>{state.activeMessage=m;renderMessages();void renderDetail();els.detailPanel.scrollIntoView({behavior:"smooth",block:"start"});});
       els.messageList.append(btn);
     }
   }
@@ -113,27 +113,35 @@
       if(!detail?.success || !detail.message)throw new Error("Không lấy được nội dung thư.");
       const d=detail.message; els.messageDetail.replaceChildren();
       const subject=document.createElement("h3");subject.className="detail-subject";subject.textContent=fixText(d.subject||m.subject||"(Không có tiêu đề)");els.messageDetail.append(subject);
-      for(const [label,value] of [["Người gửi",d.from],["Người nhận",d.to],["Ngày",d.date]]){
-        const p=document.createElement("p");p.className="detail-row detail-meta";const b=document.createElement("b");b.textContent=label+": ";p.append(b,document.createTextNode(fixText(value||"—")));els.messageDetail.append(p);
-      }
-      if(d.text){const p=document.createElement("div");p.className="message-body";p.textContent=fixText(d.text);els.messageDetail.append(p);}
-      else if(d.html){
-        const iframe=document.createElement("iframe");iframe.className="mail-frame";iframe.title="Nội dung HTML của email";
-        iframe.setAttribute("sandbox","");iframe.setAttribute("referrerpolicy","no-referrer");
-        // CSP trong srcdoc vô hiệu hóa tải tài nguyên và gửi form từ thư HTML.
-        iframe.srcdoc='<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; base-uri \'none\'; form-action \'none\'">'+d.html;
-        els.messageDetail.append(iframe);
-      }else{els.messageDetail.append(makeEmpty("Email không có phần nội dung văn bản có thể hiển thị."));}
-      if(Array.isArray(d.attachments)&&d.attachments.length){
-        const heading=document.createElement("h3");heading.className="detail-label";heading.textContent=`Tệp đính kèm (${d.attachments.length})`;els.messageDetail.append(heading);
-        const box=document.createElement("div");box.className="attachment-list";
-        for(const a of d.attachments){
-          const item=document.createElement("div");item.className="attachment";const label=document.createElement("span");
-          label.textContent=fixText(a.filename||"Tệp đính kèm")+" · "+formatBytes(a.size);
-          const button=document.createElement("button");button.className="btn btn-outline";button.type="button";button.textContent="Tải xuống";button.disabled=!a.attachment_id && !a.inline_data;
-          button.addEventListener("click",()=>void downloadAttachment(account.id,m.id,a,button));item.append(label,button);box.append(item);
+      const sender=document.createElement("p");sender.className="detail-row detail-meta";const strong=document.createElement("b");strong.textContent="Người gửi: ";sender.append(strong,document.createTextNode(fixText(d.from||"—")));els.messageDetail.append(sender);
+      const meta=document.createElement("p");meta.className="detail-row detail-meta";meta.textContent="Ngày: "+(d.date||"—");els.messageDetail.append(meta);
+      if(d.to){const rec=document.createElement("details");rec.className="recipient-details";const summary=document.createElement("summary");const count=(d.to.match(/@/g)||[]).length;summary.textContent=`Người nhận${count?` (khoảng ${count})`:""} · Xem tất cả`;const contents=document.createElement("p");contents.textContent=fixText(d.to);rec.append(summary,contents);els.messageDetail.append(rec);}
+      const summaryBox=document.createElement("section");summaryBox.className="ai-summary";const heading=document.createElement("h3");heading.textContent="✦ Báo cáo tóm tắt thông minh";summaryBox.append(heading);
+      const helper=document.createElement("p");helper.className="ai-disclosure";helper.textContent="Chỉ phân tích khi bạn yêu cầu. Dữ liệu email và các tệp được chọn sẽ được gửi đến Gemini API sau khi bạn xác nhận. Các tệp vượt giới hạn hoặc không đọc được sẽ được báo rõ.";summaryBox.append(helper);
+      const toolbar=document.createElement("div");toolbar.className="ai-tools";const checkboxLabel=document.createElement("label");const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=true;checkboxLabel.append(checkbox,document.createTextNode(" Phân tích cả tệp đính kèm (tối đa 3 tệp, 3 MB/tệp)"));
+      const summarize=document.createElement("button");summarize.type="button";summarize.className="btn btn-primary";summarize.textContent="✦ Tóm tắt email và tài liệu";
+      const output=document.createElement("div");output.className="ai-report";output.setAttribute("aria-live","polite");
+      toolbar.append(checkboxLabel,summarize);summaryBox.append(toolbar,output);els.messageDetail.append(summaryBox);
+      summarize.addEventListener("click",async()=>{
+        const include=checkbox.checked;const consent=include?"Gửi nội dung email và tối đa 3 tệp đính kèm được hỗ trợ đến Gemini API để tóm tắt?":"Chỉ gửi nội dung email đến Gemini API để tóm tắt?";
+        if(!window.confirm(consent))return;
+        summarize.disabled=true;summarize.textContent="Đang phân tích…";output.className="ai-report ai-loading";output.textContent="Đang đọc tài liệu và tạo báo cáo. Vui lòng chờ…";
+        try{const result=await invoke("gmail-ai-summary",{account_id:account.id,message_id:m.id,include_attachments:include});if(!result?.success||typeof result.report!=="string")throw Error("Dữ liệu AI không hợp lệ");if(seq!==state.detailSeq)return;
+          output.className="ai-report";output.textContent=result.report+(result.cached?"\n\n[Đã sử dụng kết quả được lưu, không gọi lại AI.]":"");
+          if(Array.isArray(result.warnings)&&result.warnings.length){const warns=document.createElement("p");warns.className="ai-warning";warns.textContent="Lưu ý: "+result.warnings.join(" | ");output.append(warns);}
+        }catch(error){if(seq===state.detailSeq){output.className="ai-report ai-warning";output.textContent="Chưa thể tóm tắt: "+errorMessage(error);}}
+        finally{summarize.disabled=false;summarize.textContent="✦ Tóm tắt email và tài liệu";}
+      });
+      const attachments=Array.isArray(d.attachments)?d.attachments:[];
+      if(attachments.length){const h=document.createElement("h3");h.className="detail-label";h.textContent=`Tệp đính kèm (${attachments.length})`;els.messageDetail.append(h);const box=document.createElement("div");box.className="attachment-list";
+        for(const attachment of attachments){const item=document.createElement("div");item.className="attachment";const label=document.createElement("span");label.className="attachment-name";label.textContent=fixText(attachment.filename||"Tệp đính kèm")+" · "+formatBytes(attachment.size);
+          const button=document.createElement("button");button.className="btn btn-outline";button.type="button";button.textContent="Tải xuống";button.disabled=!attachment.attachment_id&&!attachment.inline_data;button.addEventListener("click",()=>void downloadAttachment(account.id,m.id,attachment,button));item.append(label,button);box.append(item);
         }els.messageDetail.append(box);
       }
+      const original=document.createElement("details");original.className="hidden-original";const originalTitle=document.createElement("summary");originalTitle.textContent="Xem nội dung email gốc";original.append(originalTitle);
+      if(d.text){const p=document.createElement("div");p.className="message-body";p.textContent=fixText(d.text);original.append(p);}
+      else if(d.html){const iframe=document.createElement("iframe");iframe.className="mail-frame";iframe.title="Nội dung HTML của email";iframe.setAttribute("sandbox","");iframe.setAttribute("referrerpolicy","no-referrer");iframe.srcdoc='<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; base-uri \'none\'; form-action \'none\'">'+d.html;original.append(iframe);}
+      else original.append(makeEmpty("Email không có nội dung văn bản."));els.messageDetail.append(original);
     }catch(error){if(seq===state.detailSeq){els.messageDetail.replaceChildren();const p=document.createElement("div");p.className="detail-error";p.textContent="Không đọc được nội dung thư: "+errorMessage(error);els.messageDetail.append(p);}}
   }
   function formatBytes(size){const n=Number(size)||0;return n>=1048576?(n/1048576).toFixed(1)+" MB":n>=1024?(n/1024).toFixed(1)+" KB":n+" B";}
@@ -212,7 +220,7 @@
     });
     els.loginBtn.addEventListener("click",login);els.logoutBtn.addEventListener("click",logout);
     els.addAccountBtn.addEventListener("click",addAccount);els.refreshBtn.addEventListener("click",loadMessages);
-    els.searchInput.addEventListener("input",renderMessages);
+    els.searchInput.addEventListener("input",renderMessages);els.backInboxBtn.addEventListener("click",()=>els.messageList.scrollIntoView({behavior:"smooth",block:"start"}));
     await checkSession();
   }
   void init();
